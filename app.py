@@ -1,3 +1,6 @@
+# ✅ BACKEND CON WHISPER.CPP OPTIMIZADO PARA RENDER FREE
+# Requiere whisper-cpp instalado como binario y accesible vía subprocess
+
 from flask import Flask, request, jsonify
 import tempfile
 import subprocess
@@ -21,15 +24,15 @@ def transcribir_audio():
             wav_path = input_path.replace(".webm", ".wav")
             subprocess.run(["ffmpeg", "-y", "-i", input_path, wav_path], check=True)
 
-            # Ejecuta whisper.cpp usando el modelo multilingüe
+            # Ejecuta whisper.cpp en modo tiny
             subprocess.run([
-                "./main",
-                "-m", "models/ggml-tiny.bin",
+                "./main",              # whisper.cpp binario compilado
+                "-m", "models/ggml-tiny.en.bin",
                 "-f", wav_path,
                 "-otxt"
             ], check=True)
 
-            # Lee la salida de texto generada
+            # Lee la salida
             with open(wav_path + ".txt", "r") as f:
                 texto = f.read()
 
