@@ -12,6 +12,11 @@ def transcribir_audio():
         return jsonify({"error": "No se envió audio"}), 400
 
     audio = request.files["audio"]
+    print("🔍 Archivo recibido:", audio.filename)
+    print("🧾 Content-Type:", audio.content_type)
+    print("📏 Tamaño:", len(audio.read()), "bytes")
+    audio.seek(0)
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
         audio.save(tmp.name)
 
@@ -20,6 +25,7 @@ def transcribir_audio():
                 transcript = openai.Audio.transcribe("whisper-1", f)
                 texto = transcript["text"]
         except Exception as e:
+            print("❌ Error al transcribir:", str(e))
             return jsonify({"error": f"Error al transcribir: {str(e)}"}), 500
         finally:
             os.remove(tmp.name)
