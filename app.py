@@ -1,36 +1,66 @@
-from flask import Flask, request, jsonify
+# ✅ Suenia - app.py con grabación real vía streamlit-audiorecorder
+import streamlit as st
+import requests
 import tempfile
-import os
-import openai
+import base64
+from streamlit_audiorecorder import audiorecorder
+from utils_gpt import interpretar_sueno
+from utils_audio import reproducir_texto_en_audio
 
-app = Flask(__name__)
-openai.api_key = os.getenv("OPENAI_API_KEY")
+st.set_page_config(page_title="💤 Suenia | Interpretación de Sueños", layout="centered")
 
-@app.route("/transcribir", methods=["POST"])
-def transcribir_audio():
-    if "audio" not in request.files:
-        return jsonify({"error": "No se envió audio"}), 400
+st.markdown("<h1 style='text-align: center;'>💤 Suenia | Interpretación de Sueños</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>Describe aquí tu sueño si no vas a grabarlo...</p>", unsafe_allow_html=True)
 
-    audio = request.files["audio"]
-    print("🔍 Archivo recibido:", audio.filename)
-    print("🧾 Content-Type:", audio.content_type)
-    print("📏 Tamaño:", len(audio.read()), "bytes")
-    audio.seek(0)
+# Entrada manual
+sueno_texto = st.text_input("✍️ Escribe tu sueño aquí...")
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-        audio.save(tmp.name)
+# Grabador de audio real
+st.markdown("## 🎙️ O graba tu sueño con tu voz:")
+audio_data = audiorecorder("🎤 Iniciar grabación", "⏹️ Detener grabación")
 
+# Mostrar checkbox si hay audio válido
+usar_audio = False
+if isinstance(audio_data, bytes) and len(audio_data) > 10000:
+    usar_audio = st.checkbox("Usar grabación de voz en lugar del texto escrito")
+
+# Acción principal
+if st.button("Interpretar mi sueño"):
+    if usar_audio:
         try:
-            with open(tmp.name, "rb") as f:
-                transcript = openai.Audio.transcribe("whisper-1", f)
-                texto = transcript["text"]
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
+                f.write(audio_data)
+                audio_path = f.name
+
+            files = {'audio': open(audio_path, 'rb')}
+            response = requests.post("https://grabador-backend.onrender.com/transcribir", files=files)
+            response.raise_for_status()
+            transcripcion = response.json().get("transcripcion", "").strip()
+
+            if not transcripcion:
+                st.warning("No se pudo transcribir el audio.")
+                st.stop()
+
+            st.markdown("### 📝 Transcripción del sueño:")
+            st.text_area("Texto transcrito:", value=transcripcion, height=160)
+            sueno_procesar = transcripcion
+
         except Exception as e:
-            print("❌ Error al transcribir:", str(e))
-            return jsonify({"error": f"Error al transcribir: {str(e)}"}), 500
-        finally:
-            os.remove(tmp.name)
+            st.error(f"❌ Error al enviar el audio: {str(e)}")
+            st.stop()
 
-        return jsonify({"transcripcion": texto})
+    elif sueno_texto.strip():
+        sueno_procesar = sueno_texto.strip()
+    else:
+        st.warning("Por favor, escribe o graba un sueño.")
+        st.stop()
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+    # Interpretación con GPT
+    interpretacion = interpretar_sueno(sueno_procesar)
+    st.markdown("### 🔮 Interpretación del Sueño:")
+    st.write(interpretacion)
+
+    if st.checkbox("🔊 Escuchar interpretación en voz"):
+        audio_file = reproducir_texto_en_audio(interpretacion)
+        if audio_file:
+            st.audio(audio_file)
